@@ -40,9 +40,6 @@ section[data-testid="time-input"] input {
     border-radius: 8px !important; padding: 0.5rem !important;
     color: #071330 !important; font-weight: 500;
 }
-section[data-testid="time-input"] > div {
-    padding-left: 0px !important; padding-right: 0px !important;
-}
 [data-testid="stRadio"] > div {
     flex-direction: column;
     gap: 0.5rem;
@@ -74,32 +71,29 @@ st.caption("Log, filter, analyze and export your expenses.")
 # -------- Sidebar Navigation --------
 with st.sidebar:
     st.markdown("### 📌 Choose Section")
-
     menu = st.radio(
         "Choose Section",
-        ["💾 Add Expenses", "📂 View Expenses", "📈 Expense Summary"],
-        index=["💾 Add Expenses", "📂 View Expenses", "📈 Expense Summary"].index(
-            st.session_state.get("menu", "💾 Add Expenses")
-        ),
+        ["💾 Add Expenses", "📂 View Expenses", "📈 Expense Summary", "👥 Splitwise Console"],
         label_visibility="collapsed"
     )
-    st.session_state["menu"] = menu
 
 # -------- File Path --------
 directory = os.getcwd()
 file_name = "business_expenses.xlsx"
 file_path = os.path.join(directory, file_name)
 
-# -------- Add Expenses Tab --------
+members = ["Satish Yadav", "Sathish Kumar", "Arun Kumar", "Deepak GL", "Aman Singh"]
+
+# -------- Add Expenses --------
 if menu == "💾 Add Expenses":
     st.header("💾 Expense Entry")
-
     col1, col2 = st.columns(2)
 
     with col1:
         amount = st.number_input("💰 Amount (INR)", min_value=0.0, step=1.0, format="%.0f")
         category = st.text_input("📂 Category", placeholder="e.g. Travel, Office")
         subcategory = st.text_input("🏷️ Subcategory", placeholder="e.g. Taxi, Food")
+        paid_by = st.selectbox("👤 Paid By", members)
 
     with col2:
         description = st.text_area("📝 Description", placeholder="Detailed expense info", height=140)
@@ -120,9 +114,9 @@ if menu == "💾 Add Expenses":
             "Category": category,
             "SubCategory": subcategory,
             "Description": description,
+            "PaidBy": paid_by,
             "DateTime (IST)": datetime_input.strftime('%Y-%m-%d %H:%M:%S')
         }
-
         new_df = pd.DataFrame([new_data])
         try:
             if os.path.exists(file_path):
@@ -130,16 +124,14 @@ if menu == "💾 Add Expenses":
                 final_df = pd.concat([existing_df, new_df], ignore_index=True)
             else:
                 final_df = new_df
-
             final_df.to_excel(file_path, index=False)
             st.success(f"✅ Expense saved to `{file_path}`")
         except Exception as e:
             st.error(f"❌ Error saving file: {e}")
 
-# -------- View Table Tab --------
+# -------- View Expenses --------
 elif menu == "📂 View Expenses":
     st.header("📂 View & Filter Expenses")
-
     if os.path.exists(file_path):
         df = pd.read_excel(file_path)
 
@@ -157,14 +149,12 @@ elif menu == "📂 View Expenses":
 
         st.dataframe(filtered_df, use_container_width=True)
 
-        # Display total filtered expense amount
         if not filtered_df.empty:
             total_amount = filtered_df["Amount (INR)"].sum()
             st.markdown(f"### 💸 Total Filtered Expenses: INR {total_amount:,.2f}")
         else:
-            st.warning("⚠️ No matching expenses found for the selected filters.")
+            st.warning("⚠️ No matching expenses found.")
 
-        # Edit/Delete Section
         st.markdown("---")
         st.subheader("✏️ Edit or 🗑️ Delete an Entry")
 
@@ -177,9 +167,9 @@ elif menu == "📂 View Expenses":
                 new_category = st.text_input("📂 Category", value=selected_row["Category"])
                 new_subcat = st.text_input("🏷️ Subcategory", value=selected_row["SubCategory"])
                 new_desc = st.text_area("📝 Description", value=selected_row["Description"])
+                new_paid_by = st.selectbox("👤 Paid By", members, index=members.index(selected_row["PaidBy"]) if selected_row["PaidBy"] in members else 0)
                 new_date = st.date_input("📅 Date", value=pd.to_datetime(selected_row["DateTime (IST)"]).date())
                 new_time = st.time_input("⏰ Time", value=pd.to_datetime(selected_row["DateTime (IST)"]).time())
-
                 submit_edit = st.form_submit_button("📏 Update Entry")
                 delete_entry = st.form_submit_button("🗑️ Delete Entry")
 
@@ -192,6 +182,7 @@ elif menu == "📂 View Expenses":
                     "Category": new_category,
                     "SubCategory": new_subcat,
                     "Description": new_desc,
+                    "PaidBy": new_paid_by,
                     "DateTime (IST)": datetime.combine(new_date, new_time).strftime('%Y-%m-%d %H:%M:%S')
                 }
                 full_df.to_excel(file_path, index=False)
@@ -210,13 +201,11 @@ elif menu == "📂 View Expenses":
             pdf.set_font("Arial", size=10)
             pdf.set_fill_color(216, 156, 96)
             pdf.set_text_color(0)
-
             pdf.cell(0, 10, txt="Expense Report", ln=True, align='C')
             pdf.ln(5)
 
-            headers = ["DateTime", "Amount", "Category", "SubCategory", "Description"]
-            col_widths = [40, 25, 30, 30, 65]
-
+            headers = ["DateTime", "Amount", "Category", "SubCategory", "Description", "PaidBy"]
+            col_widths = [35, 20, 25, 25, 55, 25]
             for i, h in enumerate(headers):
                 pdf.cell(col_widths[i], 10, h, 1, 0, 'C')
             pdf.ln()
@@ -224,10 +213,11 @@ elif menu == "📂 View Expenses":
             for _, row in data.iterrows():
                 values = [
                     str(row['DateTime (IST)']),
-                    f"INR {row['Amount (INR)']}",
+                    f"{row['Amount (INR)']}",
                     str(row['Category']),
                     str(row['SubCategory']),
-                    str(row['Description'])
+                    str(row['Description']),
+                    str(row['PaidBy'])
                 ]
                 for i, val in enumerate(values):
                     pdf.cell(col_widths[i], 10, val, 1)
@@ -247,17 +237,15 @@ elif menu == "📂 View Expenses":
         with colB:
             if st.button("📏 Save Filtered PDF to Directory"):
                 pdf_file_path = file_path.replace(".xlsx", "_filtered_report.pdf")
-                pdf = create_pdf(filtered_df)
                 pdf.output(pdf_file_path)
                 st.success(f"✅ PDF saved to `{pdf_file_path}`")
 
     else:
-        st.info("ℹ️ No data file found. Please save at least one entry to enable viewing.")
+        st.info("ℹ️ No data file found. Please add at least one entry.")
 
-# -------- Charts Tab --------
+# -------- Charts --------
 elif menu == "📈 Expense Summary":
     st.header("📈 Expense Summary")
-
     if os.path.exists(file_path):
         df = pd.read_excel(file_path)
         df["DateTime (IST)"] = pd.to_datetime(df["DateTime (IST)"])
@@ -265,15 +253,187 @@ elif menu == "📈 Expense Summary":
 
         with st.expander("📊 Charts"):
             col1, col2 = st.columns(2)
-
             with col1:
                 st.subheader("📊 By Category")
                 cat_totals = df.groupby("Category")["Amount (INR)"].sum().sort_values(ascending=False)
                 st.bar_chart(cat_totals)
-
             with col2:
                 st.subheader("📈 By Date")
                 date_totals = df.groupby("Date")["Amount (INR)"].sum()
                 st.line_chart(date_totals)
     else:
-        st.info("ℹ️ No data file found. Please save at least one entry to view charts.")
+        st.info("ℹ️ No data file found.")
+elif menu == "👥 Splitwise Console":
+    st.header("👥 Splitwise Console")
+
+    paid_file = file_path.replace(".xlsx", "_paid_records.xlsx")
+    advance_file = file_path.replace(".xlsx", "_advance_records.xlsx")
+
+    if os.path.exists(file_path):
+        df = pd.read_excel(file_path)
+
+        if "PaidBy" not in df.columns:
+            st.warning("⚠️ 'PaidBy' column not found. Please ensure new expenses include 'PaidBy' info.")
+        else:
+            df = df[df["PaidBy"].isin(members)]
+            df["Amount (INR)"] = pd.to_numeric(df["Amount (INR)"], errors='coerce')
+            df = df.dropna(subset=["Amount (INR)", "PaidBy"])
+
+            paid_df = pd.read_excel(paid_file) if os.path.exists(paid_file) else pd.DataFrame(columns=["Payer", "Payee", "Owes", "Description", "DateTime"])
+            advance_df = pd.read_excel(advance_file) if os.path.exists(advance_file) else pd.DataFrame(columns=["From", "To", "Amount", "DateTime"])
+
+            split_records = []
+            total_paid = {member: 0.0 for member in members}
+            advance_paid = {member: 0.0 for member in members}
+
+            for _, row in df.iterrows():
+                payer = row["PaidBy"]
+                amount = row["Amount (INR)"]
+                desc = row.get("Description", "")
+                dt = row.get("DateTime (IST)", "")
+                per_head = round(amount / len(members), 2)
+
+                total_paid[payer] += amount
+
+                for member in members:
+                    if member != payer:
+                        entry = {
+                            "Payer": payer,
+                            "Payee": member,
+                            "Owes": per_head,
+                            "Description": desc,
+                            "DateTime": dt
+                        }
+                        if not ((paid_df["Payer"] == payer) & (paid_df["Payee"] == member) & (paid_df["DateTime"] == dt)).any():
+                            split_records.append(entry)
+
+            if split_records:
+                split_df = pd.DataFrame(split_records)
+
+                # Advance Payment Input
+                st.subheader("💰 Record Advance Payment")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    adv_from = st.selectbox("Paid By", members, key="adv_from")
+                with col2:
+                    adv_to = st.selectbox("Paid To", [m for m in members if m != adv_from], key="adv_to")
+                with col3:
+                    adv_amount = st.number_input("Amount (INR)", min_value=0.0, format="%.2f", key="adv_amount")
+
+                adv_date = st.date_input("Date of Payment", key="adv_date")
+
+                if st.button("➕ Add Advance Payment"):
+                    new_adv = pd.DataFrame([{
+                        "From": adv_from,
+                        "To": adv_to,
+                        "Amount": adv_amount,
+                        "DateTime": str(adv_date)
+                    }])
+                    advance_df = pd.concat([advance_df, new_adv], ignore_index=True)
+                    advance_df.to_excel(advance_file, index=False)
+                    st.success(f"✅ Recorded ₹{adv_amount:.2f} advance from {adv_from} to {adv_to}")
+                    st.rerun()
+
+                # 👤 Select User to Settle Dues
+                st.subheader("👤 Select User to Settle Dues")
+                selected_payee = st.selectbox("Select a user to view or mark dues as paid", options=members)
+
+                if selected_payee:
+                    user_dues = split_df[split_df["Payee"] == selected_payee]
+                    with st.expander(f"🔍 Outstanding dues for {selected_payee}", expanded=True):
+                        if user_dues.empty:
+                            # Show what others owe to this user
+                            others_owe = split_df[split_df["Payer"] == selected_payee]
+                            total_owed_to_user = others_owe["Owes"].sum()
+
+                            if total_owed_to_user > 0:
+                                st.info(f"✅ {selected_payee} has no dues to pay.\n\n💰 Others owe **₹{total_owed_to_user:.2f}** to them.")
+                                for _, row in others_owe.iterrows():
+                                    st.markdown(f"➡️ `{row['Payee']}` owes **₹{row['Owes']:.2f}** to `{selected_payee}` for _{row['Description']}_ on `{row['DateTime']}`")
+                            else:
+                                st.success(f"✅ {selected_payee} has no dues and no one owes them anything.")
+                        else:
+                            total_due = user_dues["Owes"].sum()
+                            st.warning(f"🧾 {selected_payee} owes a total of **₹{total_due:.2f}** to others.")
+                            for _, row in user_dues.iterrows():
+                                st.markdown(f"➡️ `{selected_payee}` owes **₹{row['Owes']:.2f}** to `{row['Payer']}` for _{row['Description']}_ on `{row['DateTime']}`")
+
+                            if st.checkbox(f"✅ Confirm you want to settle all dues for {selected_payee}"):
+                                if st.button(f"💸 Mark All as Paid for {selected_payee}"):
+                                    paid_df = pd.concat([paid_df, user_dues], ignore_index=True)
+                                    paid_df.to_excel(paid_file, index=False)
+                                    st.success(f"✅ All dues settled for {selected_payee}!")
+                                    st.rerun()
+
+                # 📉 Net Balances
+                st.markdown("---")
+                net_balances = {member: 0.0 for member in members}
+                for row in split_df.to_dict(orient="records"):
+                    net_balances[row["Payee"]] -= row["Owes"]
+                    net_balances[row["Payer"]] += row["Owes"]
+
+                if not advance_df.empty:
+                    for _, row in advance_df.iterrows():
+                        payer = row["From"]
+                        receiver = row["To"]
+                        amount = row["Amount"]
+                        net_balances[payer] += amount
+                        net_balances[receiver] -= amount
+                        advance_paid[payer] += amount
+
+                total_expense = sum(total_paid.values())
+                share_per_person = round(total_expense / len(members), 2)
+
+                st.subheader("📉 Net Balances")
+                settlement_data = []
+
+                for member in members:
+                    pending = round(total_paid[member] + advance_paid[member] - share_per_person, 2)
+                    owes_to = None
+                    if pending < 0:
+                        potential_creditors = {m: net_balances[m] for m in members if net_balances[m] > 0}
+                        if potential_creditors:
+                            owes_to = max(potential_creditors, key=potential_creditors.get)
+                    settlement_data.append({
+                        "Member": member,
+                        "Total Paid (INR)": round(total_paid[member], 2),
+                        "Advance Paid (INR)": round(advance_paid[member], 2),
+                        "Share Owed (INR)": share_per_person,
+                        "Pending (INR)": pending,
+                        "Owes To": owes_to if owes_to else "—"
+                    })
+
+                settlement_df = pd.DataFrame(settlement_data)
+                st.dataframe(settlement_df, use_container_width=True)
+                st.markdown(f"💰 **Total Group Expense:** ₹{total_expense:.2f}")
+
+                # 📬 Settlement Suggestions
+                st.subheader("📬 Settlement Suggestions")
+                pending_balances = {row["Member"]: row["Pending (INR)"] for row in settlement_data}
+                creditors = {m: amt for m, amt in pending_balances.items() if amt > 0}
+                debtors = {m: -amt for m, amt in pending_balances.items() if amt < 0}
+
+                settlements = []
+                for debtor, debt_amt in debtors.items():
+                    for creditor, cred_amt in list(creditors.items()):
+                        if debt_amt == 0:
+                            break
+                        pay_amt = min(debt_amt, cred_amt)
+                        settlements.append(f"💸 `{debtor}` should pay **₹{pay_amt:.2f}** to `{creditor}`")
+                        debt_amt -= pay_amt
+                        creditors[creditor] -= pay_amt
+                        if creditors[creditor] == 0:
+                            del creditors[creditor]
+                        if debt_amt == 0:
+                            break
+
+                if settlements:
+                    for s in settlements:
+                        st.markdown(s)
+                else:
+                    st.success("✅ All expenses are settled!")
+
+            else:
+                st.success("✅ All expenses are settled!")
+    else:
+        st.warning("⚠️ Expense file not found. Please add expenses first.")
